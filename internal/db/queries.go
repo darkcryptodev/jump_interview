@@ -2,7 +2,7 @@ package db
 
 import (
 	"fmt"
-	"jump/jump_interview/internal/types"
+	"jump_interview/internal/types"
 	"strconv"
 
 	_ "github.com/lib/pq"
@@ -40,7 +40,7 @@ func GetUsers() ([]types.User, error) {
 	return users, nil
 }
 
-func CreateInvoice(invoice types.Invoice) error {
+func CreateInvoice(invoice types.InvoiceInput) error {
 	// Convert the float32 amount to an integer (assuming the database saves amounts as cents)
 	amountAsInt := int64(100 * invoice.Amount)
 	// Insert new invoice
@@ -55,24 +55,39 @@ func CreateInvoice(invoice types.Invoice) error {
 	return nil
 }
 
-func CreateTransaction(transaction types.Transaction) error {
-	// Check if the invoice with the given ID and amount exists
-	var invoiceID int
-	var invoiceAmount float64
-	// Convert the float32 amount to an integer (assuming the database saves amounts as cents)
-	transactionAmountAsInt := int64(100 * transaction.Amount)
+func GetCorrespondingInvoice(transaction types.Transaction) (*types.Invoice, error) {
+	var invoice types.Invoice
 	err := DB.QueryRow(
-		"SELECT id, amount FROM invoices WHERE id = $1 AND amount = $2::bigint",
-		transaction.InvoiceID, transactionAmountAsInt,
-	).Scan(&invoiceID, &invoiceAmount)
+		"SELECT id, user_id, status, label, amount FROM invoices WHERE id = $1",
+		transaction.InvoiceID,
+	).Scan(&invoice.ID, &invoice.UserID, &invoice.Status, &invoice.Label, &invoice.Amount)
 	if err != nil {
 		fmt.Println("Error corresponding invoice not found:", err)
-		return err
+		return nil, err
 	}
 
+	return &invoice, nil
+}
+
+func AcceptTransaction(transaction types.Transaction) error {
+	// Must be in 1 commit: set invoice as paid if and only if balance is updated
+	tx, err := DB.Begin()
+	if err != nil {
+		fmt.Println("Error starting transaction:", err)
+		return err
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+			return
+		}
+		err = tx.Commit()
+	}()
+
 	// Increase the user's balance corresponding to the invoice
-	_, err = DB.Exec(
-		"UPDATE users SET balance = balance + $1::bigint WHERE id = (SELECT user_id FROM invoices WHERE id = $2)",
+	transactionAmountAsInt := int64(100 * transaction.Amount)
+	_, err = tx.Exec(
+		"UPDATE users SET balance = balance + $1 WHERE id = (SELECT user_id FROM invoices WHERE id = $2)",
 		transactionAmountAsInt, transaction.InvoiceID,
 	)
 	if err != nil {
@@ -80,7 +95,17 @@ func CreateTransaction(transaction types.Transaction) error {
 		return err
 	}
 
-	// Insert the transaction record
+	// Update the invoice status to 'paid'
+	_, err = tx.Exec(
+		"UPDATE invoices SET status = 'paid' WHERE id = $1",
+		transaction.InvoiceID,
+	)
+	if err != nil {
+		fmt.Println("Error updating invoice status:", err)
+		return err
+	}
+
+	// TO DO : Insert the transaction record
 	/*
 		_, err = DB.Exec(
 			"INSERT INTO transactions (invoice_id, amount, reference) VALUES ($1, $2, $3)",
@@ -91,5 +116,6 @@ func CreateTransaction(transaction types.Transaction) error {
 			return err
 		}
 	*/
+
 	return nil
 }

@@ -7,10 +7,18 @@ type User struct {
 	Balance   float32
 }
 
-type Invoice struct {
+type InvoiceInput struct {
 	UserID int
 	Amount float32
 	Label  string
+}
+
+type Invoice struct {
+	ID     int
+	UserID int
+	Amount int64
+	Label  string
+	Status string
 }
 
 type Transaction struct {
@@ -18,3 +26,10 @@ type Transaction struct {
 	Amount    float32
 	Reference string
 }
+
+type InvoiceStatus string
+
+const (
+	InvoiceStatusPending InvoiceStatus = "pending"
+	InvoiceStatusPaid    InvoiceStatus = "paid"
+)

@@ -2,8 +2,9 @@ package main
 
 import (
 	"encoding/json"
-	"jump/jump_interview/internal/db"
-	"jump/jump_interview/internal/types"
+	"jump_interview/internal/business"
+	"jump_interview/internal/db"
+	"jump_interview/internal/types"
 	"log"
 	"net/http"
 
@@ -12,14 +13,13 @@ import (
 )
 
 func getUsers(w http.ResponseWriter, r *http.Request) {
-	// Retrieve users from database
-	users, err := db.GetUsers()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	// Get users logic
+	users, httpCode := business.GetUsers()
 
-	// Into json and send
+	// Set the HTTP status code
+	w.WriteHeader(httpCode)
+
+	// Users to json and send back
 	jsonResp, err := json.Marshal(users)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -31,21 +31,16 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 
 func createInvoice(w http.ResponseWriter, r *http.Request) {
 	// Decode request body
-	var invoice types.Invoice
+	var invoice types.InvoiceInput
 	err := json.NewDecoder(r.Body).Decode(&invoice)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Insert invoice into database
-	err = db.CreateInvoice(invoice)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
+	// Invoice business logic
+	httpCode := business.CreateInvoice(invoice)
+	w.WriteHeader(httpCode)
 }
 
 func createTransaction(w http.ResponseWriter, r *http.Request) {
@@ -58,13 +53,8 @@ func createTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Insert transaction into database
-	err = db.CreateTransaction(transaction)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
+	httpCode := business.CreateTransaction(transaction)
+	w.WriteHeader(httpCode)
 }
 
 func main() {
